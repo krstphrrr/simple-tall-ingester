@@ -1,0 +1,2 @@
+polars
+psycopg2

@@ -1,0 +1,11 @@
+# hydrogen artifacts
+**/__pycache__
+**/*.pyc
+# env files for config
+**/.env
+
+# troubleshooting with hydrogen
+**/debug.py
+# consumables + script products
+**/*.csv
+**/*.log
