@@ -5,7 +5,6 @@ import logging.config
 
 load_dotenv()
 
-DOCKERFILE_DIR = "./_1_dima_extract"
 DBSCHEMA = "public_local"
 SCHEMAPLAN_PATH = "./validation_schemas/LDC_SchemaPlan_1.2.1.csv"
 DATABASE_CONFIG = {
@@ -17,7 +16,7 @@ DATABASE_CONFIG = {
 }
 
 TODAYS_DATE = date.today().isoformat()
-DATA_DIR = "./1_dima_extract/extracted"
+DATA_DIR = "./data" #change to tall?
 
 LOGGING_CONFIG = {
     'version': 1,
