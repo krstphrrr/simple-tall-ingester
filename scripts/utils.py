@@ -1,5 +1,5 @@
 from config import SCHEMAPLAN_PATH
-
+from scripts.data_cleaner import deduplicate_dataframe
 
 import polars as pl
 import logging
@@ -11,7 +11,8 @@ def process_csv(file_name: str):
     # MOVE LOADING TO LOADER
 
     # Load the CSV into a DataFrame with schemaplan fields
-    table_name = os.path.splitext(file_name)[0]
+    filename = os.path.basename(file_name)
+    table_name = os.path.splitext(filename)[0]
     schemaplan = pl.read_csv(SCHEMAPLAN_PATH, encoding='ISO-8859-1', schema_overrides={"Description": pl.Utf8})
     fieldnames = [i for i in schemaplan.filter(pl.col("Table")==table_name)['Field']]
     fieldtypes = [map_pg_type_to_polars(i) for i in schemaplan.filter(pl.col("Table")==table_name)['DataType']]
@@ -38,11 +39,12 @@ def process_csv(file_name: str):
         # Cleaning functions: populate fields, clean fields etc.
         # TODOdf = populate datevisited
         # TODOdf = populate dateloadedindb
-        df = deduplicate_dataframe(df)
+        csv_df = deduplicate_dataframe(csv_df)
 
         # Insert the DataFrame into the target table (includes table creation)
-        insert_dataframe_to_db(df, target_table)
-        logger.info(f"Processed {file_name} into table {target_table} with source {source}.")
+        print(csv_df)
+        # insert_dataframe_to_db(df, target_table)
+        # logger.info(f"Processed {file_name} into table {target_table} with source {source}.")
 
 def map_pg_type_to_polars(pg_type: str) -> pl.DataType:
     # Mapping PostgreSQL types to Polars types

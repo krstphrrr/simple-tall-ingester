@@ -1,6 +1,8 @@
 from scripts.utils import process_csv
 from config import DATA_DIR
 import logging
+import cmd
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ class TallIngester(cmd.Cmd):
 
             # Check if the file is a CSV
             if file_name.endswith(".csv"):
-                process_csv(file_name, file_path)
+                process_csv(file_path)
             else:
                 logger.info(f"Skipping non-CSV file: {file_name}")
 

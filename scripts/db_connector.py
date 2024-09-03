@@ -4,8 +4,6 @@ import polars as pl
 import logging
 
 
-df = pl.read_csv('data/tblRHEM.csv')
-logger = logging.getLogger(__name__)
 def map_dtype_to_sql(dtype: pl.DataType) -> str:
     if dtype == pl.Int64 or dtype == pl.Int32:
         return "INTEGER"
