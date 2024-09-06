@@ -6,6 +6,9 @@
 
 # # troubleshooting with hydrogen
 **/debug.py
+**/debug2.py
+
 # # consumables + script products
 **/*.csv
 **/*.log
+**/fields.MD

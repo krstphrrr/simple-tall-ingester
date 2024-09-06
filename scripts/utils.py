@@ -42,7 +42,8 @@ def process_csv(file_name: str):
         csv_df = deduplicate_dataframe(csv_df)
 
         # Insert the DataFrame into the target table (includes table creation)
-        print(csv_df)
+        # print(csv_df)
+        return csv_df
         # insert_dataframe_to_db(df, target_table)
         # logger.info(f"Processed {file_name} into table {target_table} with source {source}.")
 
