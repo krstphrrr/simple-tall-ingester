@@ -3,7 +3,7 @@ from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH
 import polars as pl
 import logging
 
-
+logger = logging.getLogger(__name__)
 def map_dtype_to_sql(dtype: pl.DataType) -> str:
     if dtype == pl.Int64 or dtype == pl.Int32:
         return "INTEGER"
@@ -29,6 +29,14 @@ def create_table_if_not_exists(df: pl.DataFrame, table_name: str):
         # columns = ["rid SERIAL PRIMARY KEY"] + [i for i in schemaplan.filter(pl.col("Table")==table_name)['Field']]
         columns = ["rid SERIAL PRIMARY KEY"] + [f'"{col}" {sqltype}' for col, sqltype in zip(fieldnames, fieldtypes)]
 
+
+        # Add constraints based on the table name
+        if table_name.lower() == "dataheader":
+            # If the table is "dataHeader", add a UNIQUE constraint to the "PrimaryKey" column
+            columns.append(f'UNIQUE ("PrimaryKey")')
+        else:
+            # If the table is not "dataHeader", add a FOREIGN KEY constraint
+            columns.append(f'FOREIGN KEY ("PrimaryKey") REFERENCES {DBSCHEMA}."dataHeader"("PrimaryKey")')
         columns_sql = ', '.join(columns)
         create_table_query = f"""
         CREATE TABLE IF NOT EXISTS {DBSCHEMA}."{table_name}" (
@@ -56,7 +64,7 @@ def create_table_if_not_exists(df: pl.DataFrame, table_name: str):
             conn.close()
 
 
-def insert_dataframe_to_db(df: pl.DataFrame, table_name: str):
+def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326):
     create_table_if_not_exists(df, table_name)  # Ensure table exists before inserting data
 
     conn = None
@@ -75,11 +83,31 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str):
         VALUES ({placeholders})
         """
 
+        # Insert records into the database
         for record in records:
-            cursor.execute(query, tuple(record.values()))
+            values = []
+            for col in df.columns:
+                if col == geometry_column:
+                    # Use ST_GeomFromText to convert WKT to geometry
+                    values.append(f"ST_SetSRID(ST_GeomFromText(%s), {srid})")
+                else:
+                    values.append("%s")
+
+            # Construct the query with dynamic placeholders
+            insert_query = f"""
+            INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
+            VALUES ({', '.join(values)})
+            """
+
+            # Prepare the record values, using geometry conversion when necessary
+            record_values = tuple(record[col] if col != geometry_column else record[col] for col in df.columns)
+
+            # Execute the query
+            cursor.execute(insert_query, record_values)
 
         conn.commit()
         cursor.close()
+        logger.info(f"Inserted into table \"{table_name}\" ")
 
     except Exception as e:
         if conn:

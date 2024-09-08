@@ -1,4 +1,5 @@
 from scripts.utils import process_csv
+from scripts.db_connector import insert_dataframe_to_db
 from config import DATA_DIR
 import logging
 import cmd
@@ -19,14 +20,27 @@ class TallIngester(cmd.Cmd):
     def do_ingest(self, arg):
         data_dir = DATA_DIR
 
-        for file_name in os.listdir(data_dir):
-            file_path = os.path.join(data_dir, file_name)
+        # Initialize a list to hold CSV files
+        csv_files = [file_name for file_name in os.listdir(data_dir) if file_name.endswith(".csv")]
 
-            # Check if the file is a CSV
-            if file_name.endswith(".csv"):
-                process_csv(file_path)
-            else:
-                logger.info(f"Skipping non-CSV file: {file_name}")
+        # Check if "dataHeader.csv" exists and process it first
+        if "dataHeader.csv" in csv_files:
+            file_path = os.path.join(data_dir, "dataHeader.csv")
+            result = process_csv(file_path)
+            df = result['dataframe']
+            table_name = result['table_name']
+            insert_dataframe_to_db(df, table_name)
+            logger.info(f"Ingested file: dataHeader.csv into table \"{table_name}\" ")
+            csv_files.remove("dataHeader.csv")  # Remove it from the list to avoid reprocessing
+
+        # Process remaining CSV files
+        for file_name in csv_files:
+            file_path = os.path.join(data_dir, file_name)
+            result = process_csv(file_path)
+            df = result['dataframe']
+            table_name = result['table_name']
+            insert_dataframe_to_db(df, table_name)
+            
 
 
     def do_exit(self, arg):

@@ -1,5 +1,5 @@
 from config import SCHEMAPLAN_PATH
-from scripts.data_cleaner import deduplicate_dataframe
+from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix
 
 import polars as pl
 import logging
@@ -38,14 +38,34 @@ def process_csv(file_name: str):
 
         # Cleaning functions: populate fields, clean fields etc.
         # TODOdf = populate datevisited
-        # TODOdf = populate dateloadedindb
+        # TODOdf = populate dateloadedindb\
+        logger.info(f'Working on: "{table_name}" ')
+        csv_df = create_postgis_geometry(csv_df)
+        csv_df = dateloadedfix(csv_df)
         csv_df = deduplicate_dataframe(csv_df)
+
+        scheme = schema_to_dictionary(table_name)
+        csv_df = numericfix(csv_df,scheme)
+        csv_df = integerfix(csv_df,scheme)
+        csv_df = bitfix(csv_df, scheme)
 
         # Insert the DataFrame into the target table (includes table creation)
         # print(csv_df)
-        return csv_df
+        return {
+            'table_name': table_name,
+            'dataframe': csv_df
+        }
         # insert_dataframe_to_db(df, target_table)
         # logger.info(f"Processed {file_name} into table {target_table} with source {source}.")
+
+def schema_chooser(tablename):
+    fields = pl.read_csv(SCHEMAPLAN_PATH, encoding='ISO-8859-1', schema_overrides={"Description": pl.Utf8})
+    return fields.filter(pl.col("Table")==tablename)
+
+def schema_to_dictionary(tablename):
+    schema = schema_chooser(tablename)
+    return dict(zip(schema['Field'].to_list(), schema['DataType'].to_list()))
+
 
 def map_pg_type_to_polars(pg_type: str) -> pl.DataType:
     # Mapping PostgreSQL types to Polars types
