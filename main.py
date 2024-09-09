@@ -1,4 +1,4 @@
-from scripts.utils import process_csv
+from scripts.data_loader import process_csv
 from scripts.db_connector import insert_dataframe_to_db
 from config import DATA_DIR
 import logging

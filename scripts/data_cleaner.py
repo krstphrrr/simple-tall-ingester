@@ -6,6 +6,7 @@ def deduplicate_dataframe(df: pl.DataFrame) -> pl.DataFrame:
     return df.unique()
 
 def dateloadedfix(df: pl.DataFrame) -> pl.DataFrame:
+    
     # current_date = datetime.now().strftime('%Y-%m-%d')
     current_date = TODAYS_DATE
 
