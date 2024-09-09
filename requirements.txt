@@ -1,2 +1,5 @@
 polars
 psycopg2
+fastexcel
+dotenv
+psycopg2
