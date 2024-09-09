@@ -45,7 +45,7 @@ class TallIngester(cmd.Cmd):
 
     def do_exit(self, arg):
         'Exit the CLI'
-        print('Exiting the CLI.')
+        logging.info('Exiting the CLI.')
         return True
 
 if __name__ == '__main__':

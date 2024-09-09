@@ -8,7 +8,7 @@ This Python script is designed to facilitate the ingestion of LDC talltable CSV 
 ## Todo
 - [x] Ordered ingestion: `dataHeader` first, followed by the rest of the tables
 - [x] ForeignKey check on table creation
-- [ ] projecttable: creation and ingestion
+- [x] projecttable: creation and ingestion
   - [ ] projectkey unique (no foreign key yet)
   - [ ] use excel file project_table column to replace whatever is on the dataframe already
   - [ ] stop ingestion with no projecttable entry, but if exists on projecttable use it for table

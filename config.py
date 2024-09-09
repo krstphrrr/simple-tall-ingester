@@ -7,6 +7,7 @@ load_dotenv()
 
 DBSCHEMA = "public_local"
 SCHEMAPLAN_PATH = "./validation_schemas/LDC_SchemaPlan_1.2.2.csv"
+PROJECTFILE_PATH = "./data"
 DATABASE_CONFIG = {
     "dbname": os.getenv('PROD_DBNAME'),
     "user": os.getenv('PROD_DBUSER'),

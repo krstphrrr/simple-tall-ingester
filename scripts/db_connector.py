@@ -3,7 +3,11 @@ from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH
 import polars as pl
 import logging
 
+import psycopg2
+from psycopg2 import sql
+
 logger = logging.getLogger(__name__)
+
 def map_dtype_to_sql(dtype: pl.DataType) -> str:
     if dtype == pl.Int64 or dtype == pl.Int32:
         return "INTEGER"
@@ -14,7 +18,7 @@ def map_dtype_to_sql(dtype: pl.DataType) -> str:
     else:
         return "TEXT"
 
-def create_table_if_not_exists(df: pl.DataFrame, table_name: str):
+def create_table_if_not_exists(table_name: str):
     conn = None
     try:
 
@@ -22,7 +26,6 @@ def create_table_if_not_exists(df: pl.DataFrame, table_name: str):
         cursor = conn.cursor()
 
         schemaplan = pl.read_csv(SCHEMAPLAN_PATH, encoding='ISO-8859-1', schema_overrides={"Description": pl.Utf8})
-        filtered_df = schemaplan.filter(pl.col('Table') == table_name)
 
         fieldnames = [i for i in schemaplan.filter(pl.col("Table")==table_name)['Field']]
         fieldtypes = [i for i in schemaplan.filter(pl.col("Table")==table_name)['DataType']]
@@ -65,7 +68,7 @@ def create_table_if_not_exists(df: pl.DataFrame, table_name: str):
 
 
 def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326):
-    create_table_if_not_exists(df, table_name)  # Ensure table exists before inserting data
+    create_table_if_not_exists(table_name)  # Ensure table exists before inserting data
 
     conn = None
     try:
@@ -76,12 +79,12 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
         cursor = conn.cursor()
 
         cols = ", ".join([f'"{col}"' for col in df.columns])
-        placeholders = ", ".join(["%s"] * len(df.columns))
+        # placeholders = ", ".join(["%s"] * len(df.columns))
 
-        query = f"""
-        INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
-        VALUES ({placeholders})
-        """
+        # query = f"""
+        # INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
+        # VALUES ({placeholders})
+        # """
 
         # Insert records into the database
         for record in records:
@@ -95,9 +98,9 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
 
             # Construct the query with dynamic placeholders
             insert_query = f"""
-            INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
-            VALUES ({', '.join(values)})
-            """
+                INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
+                VALUES ({', '.join(values)})
+                """
 
             # Prepare the record values, using geometry conversion when necessary
             record_values = tuple(record[col] if col != geometry_column else record[col] for col in df.columns)
@@ -116,3 +119,65 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
     finally:
         if conn:
             conn.close()
+
+
+def create_projecttable(columns: list[str], tablename: str):
+    conn = psycopg2.connect(**DATABASE_CONFIG)
+
+    # Dynamically create the table if it doesn't exist
+    create_table_query = sql.SQL("""
+        CREATE TABLE IF NOT EXISTS {DBSCHEMA}."{table}" (
+            {fields}
+            )
+        """).format(
+            table=sql.Identifier(tablename),
+            fields=sql.SQL(', ').join(sql.Identifier(col) + sql.SQL(' TEXT') for col in columns)  # Assuming all fields are TEXT type; adjust as needed
+        )
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(create_table_query)
+        conn.commit()
+        cursor.close()
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.info(f"Error creating table {tablename}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def insert_project(values: list[str], columns: list[str], tablename: str):
+    # create if not exist
+    create_projecttable(columns, tablename)
+
+    conn = psycopg2.connect(**DATABASE_CONFIG)
+    # Insert data into the table
+    insert_query = sql.SQL("""
+            INSERT INTO {DBSCHEMA}."{table}" ({columns})
+            VALUES ({placeholders})
+        """).format(
+            table=sql.Identifier(tablename),
+            columns=sql.SQL(', ').join(map(sql.Identifier, columns)),
+            placeholders=sql.SQL(', ').join(sql.Placeholder() * len(values))
+        )
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(insert_query, values)
+        conn.commit()
+        cursor.close()
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.info(f"Error inserting into table {tablename}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+    
+    

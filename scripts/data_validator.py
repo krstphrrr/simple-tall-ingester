@@ -4,6 +4,7 @@ from config import SCHEMAPLAN_PATH
 from scripts.utils import map_pg_type_to_polars
 
 logger = logging.getLogger(__name__)
+
 def dataframe_validator(df: pl.DataFrame, tablename: str) -> pl.DataFrame:
     """
     validate the loaded dataframe with schemaplan by selecting columns directly from the
@@ -27,12 +28,11 @@ def dataframe_validator(df: pl.DataFrame, tablename: str) -> pl.DataFrame:
     # add any column missing from the df PRESENT IN THE SCHEMAPLAN back in, and if it doesn't exist make it null
     for col in schemaplan_fields.columns:
         if col not in df.columns:
-            logger.info(f"dataframe_validator added field:\"{col}\"")
+            logger.info(f"dataframe_validator added field:\"{col}\" to \"{tablename}\"")
             df = df.with_columns(pl.lit(None).alias(col))
 
 
     # select entire dataframe including the potentially null colums that were just added
     df = df.select(schemaplan_fields.columns)
-
     return df
 

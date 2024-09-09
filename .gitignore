@@ -10,5 +10,6 @@
 
 # # consumables + script products
 **/*.csv
+**/*.xlsx
 **/*.log
 **/fields.MD
