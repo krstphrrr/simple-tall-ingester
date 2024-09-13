@@ -4,6 +4,20 @@ import polars as pl
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def add_or_update_project_key(csv_df: pl.DataFrame, project_key: str) -> pl.DataFrame:
+
+    # Check if 'ProjectKey' column exists in the DataFrame
+    if 'ProjectKey' in csv_df.columns:
+        # Update existing 'ProjectKey' column with the given project_key value
+        csv_df = csv_df.with_columns(pl.lit(project_key).alias('ProjectKey'))
+    else:
+        # Add a new 'ProjectKey' column with the given project_key value
+        csv_df = csv_df.with_columns(pl.lit(project_key).alias('ProjectKey'))
+
+    return csv_df
+
 def deduplicate_dataframe(df: pl.DataFrame) -> pl.DataFrame:
     return df.unique()
 
@@ -40,7 +54,7 @@ def numericfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
     for i in df.columns:
         # if column SHOULD be numeric, but is string
         if colscheme[i].lower() == 'numeric' and df[i].dtype==pl.Utf8:
-            logging.info(f'data_cleaner.numericfix is casting col "{i}" from str to numeric')
+            logging.debug(f'data_cleaner.numericfix is casting col "{i}" from str to numeric')
             df = df.with_columns(
                 pl.when(pl.col(i) == "NA")
                 .then(pl.lit(None))
@@ -53,7 +67,7 @@ def numericfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
             )
         # if column SHOULD be numeric, but is integer
         elif colscheme[i].lower() == 'numeric' and df[i].dtype==pl.Int64:
-            logging.info(f'data_cleaner.numericfix is casting col "{i}" from int to numeric')
+            logging.debug(f'data_cleaner.numericfix is casting col "{i}" from int to numeric')
             df = df.with_columns(
                 pl.col(i).cast(pl.Float64).alias(i)
             )
@@ -63,7 +77,7 @@ def integerfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
     for i in df.columns:
         # if column SHOULD be integer, but is string
         if colscheme[i].lower() == 'integer' and df[i].dtype==pl.Utf8:
-            logging.info(f'data_cleaner.integerfix is casting col "{i}" from str to integer')
+            logging.debug(f'data_cleaner.integerfix is casting col "{i}" from str to integer')
             df = df.with_columns(
                 pl.when(pl.col(i) == "NA")
                 .then(pl.lit(None))
@@ -76,7 +90,7 @@ def integerfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
             )
         # if column SHOULD be integer, but is numeric
         elif colscheme[i].lower() == 'numeric' and df[i].dtype==pl.Float64:
-            logging.info(f'data_cleaner.integerfix is casting col "{i}" from numeric to integer')
+            logging.debug(f'data_cleaner.integerfix is casting col "{i}" from numeric to integer')
             df = df.with_columns(
                 pl.col(i).cast(pl.Int64).alias(i)
             )
@@ -86,7 +100,8 @@ def bitfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
     for i in df.columns:
         # Handle string types that need conversion to bits
         if colscheme[i].lower() == 'bit' and df.select(pl.col(i)).dtypes[0] == pl.Utf8:
-            logging.info(f'data_cleaner.bitfix is processing col "{i}" to bit (found string)')
+            logging.debug(f'data_cleaner.bitfix is processing col "{i}" to bit (found string)')
+            df = df.with_columns(pl.when(pl.col(i) == '').then(None))
             if df[i].is_in(["TRUE", "FALSE"]).any():
                 df = df.with_columns(
                     pl.when(pl.col(i) == "TRUE").then(1)
@@ -117,7 +132,7 @@ def bitfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
 
         # Handle case where the column is a boolean type
         elif colscheme[i].lower() == 'bit' and df.select(pl.col(i)).dtypes[0] == pl.Boolean:
-            logging.info(f'data_cleaner.bitfix is processing col "{i}" to bit (found boolean)')
+            logging.debug(f'data_cleaner.bitfix is processing col "{i}" to bit (found boolean)')
             df = df.with_columns(pl.col(i).cast(pl.Utf8).alias(i))
             df = df.with_columns(
                 pl.when(pl.col(i) == "TRUE".lower()).then(1)
@@ -127,7 +142,7 @@ def bitfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
             )
 
         elif colscheme[i].lower() == 'bit' and df.select(pl.col(i)).dtypes[0] == pl.Int64:
-            logging.info(f'data_cleaner.bitfix is processing col "{i}" to bit (found integer)')
+            logging.debug(f'data_cleaner.bitfix is processing col "{i}" to bit (found integer)')
             df = df.with_columns(
                 pl.when(pl.col(i).is_null()).then(pl.lit(None))
                 .when(pl.col(i) == pl.lit(1)).then(pl.lit('1'))

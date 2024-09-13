@@ -126,10 +126,11 @@ def create_projecttable(columns: list[str], tablename: str):
 
     # Dynamically create the table if it doesn't exist
     create_table_query = sql.SQL("""
-        CREATE TABLE IF NOT EXISTS {DBSCHEMA}."{table}" (
-            {fields}
+        CREATE TABLE IF NOT EXISTS {db_schema}.{table} (
+            {fields} , unique("project_key")
             )
         """).format(
+            db_schema=sql.Identifier(DBSCHEMA),
             table=sql.Identifier(tablename),
             fields=sql.SQL(', ').join(sql.Identifier(col) + sql.SQL(' TEXT') for col in columns)  # Assuming all fields are TEXT type; adjust as needed
         )
@@ -139,7 +140,7 @@ def create_projecttable(columns: list[str], tablename: str):
         cursor.execute(create_table_query)
         conn.commit()
         cursor.close()
-        
+
     except Exception as e:
         if conn:
             conn.rollback()
@@ -156,9 +157,10 @@ def insert_project(values: list[str], columns: list[str], tablename: str):
     conn = psycopg2.connect(**DATABASE_CONFIG)
     # Insert data into the table
     insert_query = sql.SQL("""
-            INSERT INTO {DBSCHEMA}."{table}" ({columns})
+            INSERT INTO {db_schema}.{table} ({columns})
             VALUES ({placeholders})
         """).format(
+            db_schema = sql.Identifier(DBSCHEMA),
             table=sql.Identifier(tablename),
             columns=sql.SQL(', ').join(map(sql.Identifier, columns)),
             placeholders=sql.SQL(', ').join(sql.Placeholder() * len(values))
@@ -178,6 +180,3 @@ def insert_project(values: list[str], columns: list[str], tablename: str):
     finally:
         if conn:
             conn.close()
-
-    
-    

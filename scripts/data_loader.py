@@ -4,20 +4,20 @@ import os
 
 
 from config import SCHEMAPLAN_PATH, PROJECTFILE_PATH
-from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix
+from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix, add_or_update_project_key
 from scripts.utils import schema_to_dictionary
 from scripts.data_validator import dataframe_validator
 from scripts.db_connector import insert_project
 
 logger = logging.getLogger(__name__)
 
-def process_csv(file_name: str):
+def process_csv(file_name: str, project_key: str = None):
     # Load the CSV into a DataFrame with schemaplan fields
     filename = os.path.basename(file_name)
     table_name = os.path.splitext(filename)[0]
 
     # validate with schemaplan
-    csv_df = pl.read_csv(f"data/{table_name}.csv")
+    csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=10000)
     csv_df = dataframe_validator(csv_df, table_name)
 
     if csv_df is not None:
@@ -26,7 +26,9 @@ def process_csv(file_name: str):
         logger.info(f'Working on: "{table_name}"...')
 
         # add projectkey_populate (which in turn projectkey_extract)
-        # creaate/insert projectkey 
+        # creaate/insert projectkey
+        if project_key is not None:
+            csv_df = add_or_update_project_key(csv_df, project_key)
         csv_df = create_postgis_geometry(csv_df)
         csv_df = dateloadedfix(csv_df)
         csv_df = deduplicate_dataframe(csv_df)
@@ -47,7 +49,8 @@ def process_csv(file_name: str):
 
 def load_projecttable(excel_path: str, table_name: str):
     # Read the Excel file into a Polars DataFrame
-    df = pl.read_excel(excel_path, sheet_id=0)
+    df = pl.read_excel(excel_path, sheet_id=0)['Sheet1']
+    logger.debug(f"DF COLUMNS: {df.columns}")
 
     # Extract column names and values from the DataFrame
     column_names = df['Var'].to_list()
@@ -56,7 +59,7 @@ def load_projecttable(excel_path: str, table_name: str):
     # Create table/insert data
     insert_project(values, column_names, table_name)
 
-    print(f"Data inserted successfully into {table_name}")
+    logger.info(f"Data inserted successfully into {table_name}")
 
 def projectkey_extract():
     # load project path
