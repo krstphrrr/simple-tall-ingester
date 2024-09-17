@@ -17,13 +17,13 @@ ALTER TABLE public_test."dataGap"
 ADD CONSTRAINT unique_datagapprimarykey_column 
 UNIQUE ("PrimaryKey","LineKey", "RecKey", "SeqNo", "Gap", "RecType");
 
--- select * from public_test."dataGap" 
--- WHERE
--- "PrimaryKey" = 'ID_SHFO_LUP_2017_BWD_148_V12022-09-01'
--- AND "LineKey" = 'ID_SHFO_LUP_2017_BWD_148_V1_2'
--- AND "RecKey" = 'ID_SHFO_LUP_2017_BWD_148_V1_2'
--- AND "SeqNo" = '315'
--- AND "Gap" = '20'
+select * from public_test."dataGap" 
+WHERE
+"PrimaryKey" = 'ID_SHFO_LUP_2017_BWD_148_V12022-09-01'
+AND "LineKey" = 'ID_SHFO_LUP_2017_BWD_148_V1_2'
+AND "RecKey" = 'ID_SHFO_LUP_2017_BWD_148_V1_2'
+AND "SeqNo" = '315'
+AND "Gap" = '20'
 
 -- DATAHEIGHT
 
@@ -72,25 +72,25 @@ AND "PointLoc" = '13'
 
 -- data soilstability
 
-ALTER TABLE public_test."dataSoilStability" 
-ADD CONSTRAINT unique_datasoilstabilityprimarykey_column 
-UNIQUE ("PrimaryKey","LineKey", "RecKey", "Position","Pos", "Veg");
+-- ALTER TABLE public_test."dataSoilStability" 
+-- ADD CONSTRAINT unique_datasoilstabilityprimarykey_column 
+-- UNIQUE ("PrimaryKey","LineKey", "RecKey", "Position","Pos", "Veg");
 
--- select * from public_test."dataSoilStability" 
--- WHERE
--- "PrimaryKey" = 'MTB07000_OverSample2018_BHW-12-S2018-09-01'
--- AND "LineKey" = 'MTB07000_OverSample2018_BHW-12-S'
--- AND "RecKey" = 'MTB07000_OverSample2018_BHW-12-S'
--- AND "Pos" = '8'
--- AND "Veg" = 'G'
+select * from public_test."dataSoilStability" 
+WHERE
+"PrimaryKey" = 'MTB07000_OverSample2018_BHW-12-S2018-09-01'
+AND "LineKey" = 'MTB07000_OverSample2018_BHW-12-S'
+AND "RecKey" = 'MTB07000_OverSample2018_BHW-12-S'
+AND "Pos" = '8'
+AND "Veg" = 'G'
 
 
 -- DATA species inventory
 
 
-ALTER TABLE public_test."dataSpeciesInventory" 
-ADD CONSTRAINT unique_dataspeciesinventoryprimarykey_column 
-UNIQUE ("PrimaryKey","LineKey", "RecKey", "Species");
+-- ALTER TABLE public_test."dataSpeciesInventory" 
+-- ADD CONSTRAINT unique_dataspeciesinventoryprimarykey_column 
+-- UNIQUE ("PrimaryKey","LineKey", "RecKey", "Species");
 
 -- geoSpecies
 
