@@ -1,8 +1,10 @@
 import psycopg2
-from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH
+from sqlalchemy import create_engine
+from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH, NOPRIMARYKEYPATH
 from scripts.utils import generate_unique_constraint_query
 import polars as pl
 import logging
+import os
 
 import psycopg2
 from psycopg2 import sql
@@ -18,6 +20,40 @@ def map_dtype_to_sql(dtype: pl.DataType) -> str:
         return "DATE"
     else:
         return "TEXT"
+    
+
+def subset_and_save(tabledf: pl.DataFrame, table_name: str) -> pl.DataFrame:
+    logger.info(f'Matching "PrimaryKeys" with header.. a subset of "{table_name}" will be produced in the ./noprimarykey dir if mismatches are found.')
+    # if dbkey is required, add extraction here here
+    try:
+        connection = psycopg2.connect(**DATABASE_CONFIG)
+        # Query the "dataHeader" table and load it into a Polars DataFrame
+        query = f'SELECT "PrimaryKey" FROM {DBSCHEMA}."dataHeader";'
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            # Fetch all results into a DataFrame
+            data = cursor.fetchall()
+            dataHeader_df = pl.DataFrame(data, orient="row", schema=["PrimaryKey"])
+            cursor.close()
+    
+        # Extract the unique PrimaryKey values from the dataHeader DataFrame
+        primary_keys = dataHeader_df.select(pl.col("PrimaryKey"))
+
+        # Filter tblRHEM_df where PrimaryKey exists in the primary_keys list
+        matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="inner")
+
+        # Filter tblRHEM_df where PrimaryKey does not exist in the primary_keys list
+        non_matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="anti")
+
+        # Save the non-matching part to a CSV file
+        non_matching_csv_file = os.path.join(NOPRIMARYKEYPATH,f"no_primarykeys_{table_name}.csv")
+        non_matching_df.write_csv(non_matching_csv_file)
+
+        # Return the matching subset for ingestion
+        return matching_df
+    finally:
+        #  Ensure the connection is closed
+        connection.close()
 
 def create_table_if_not_exists(table_name: str):
     conn = None

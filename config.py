@@ -8,6 +8,7 @@ load_dotenv()
 DBSCHEMA = "public_test"
 SCHEMAPLAN_PATH = "./validation_schemas/LDC_SchemaPlan_1.2.2.csv"
 PROJECTFILE_PATH = "./data"
+NOPRIMARYKEYPATH = "./noprimarykey"
 DATABASE_CONFIG = {
     "dbname": os.getenv('PROD_DBNAME'),
     "user": os.getenv('PROD_DBUSER'),

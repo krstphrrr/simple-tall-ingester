@@ -7,7 +7,7 @@ from config import SCHEMAPLAN_PATH, PROJECTFILE_PATH
 from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix, add_or_update_project_key
 from scripts.utils import schema_to_dictionary
 from scripts.data_validator import dataframe_validator
-from scripts.db_connector import insert_project
+from scripts.db_connector import insert_project, subset_and_save
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,8 @@ def process_csv(file_name: str, project_key: str = None):
         - need to trim non-headers to fit 
             - save the non-header part that did not have pk's that correspond w header 
         """
+        if "tblRHEM" in table_name:
+            csv_df = subset_and_save(csv_df, table_name)
 
         csv_df = create_postgis_geometry(csv_df)
         csv_df = dateloadedfix(csv_df)

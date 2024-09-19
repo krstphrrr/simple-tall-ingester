@@ -1,4 +1,4 @@
-from config import SCHEMAPLAN_PATH
+from config import SCHEMAPLAN_PATH, DBSCHEMA
 from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix
 
 import polars as pl
