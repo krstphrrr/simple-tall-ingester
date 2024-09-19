@@ -223,9 +223,17 @@ def insert_project(values: list[str], columns: list[str], tablename: str):
         if conn:
             conn.close()
 
-def subset_and_save(tabledf: pl.DataFrame, table_name: str) -> pl.DataFrame:
+def subset_and_save(table_df: pl.DataFrame, table_name: str) -> pl.DataFrame:
     logger.info(f'db_connector: Matching "PrimaryKeys" with header.. a subset of "{table_name}" will be produced in the ./noprimarykey dir if mismatches are found.')
     # if dbkey is required, add extraction here here
+    # dbkey check and add for csv's with not primarykeys
+    dbkey = None
+    if "DBKey" in table_df.colums:
+        dbkey = table_df[0].select(pl.col("DBKey").unique())[0,0]
+    else:
+        dbkey="nodbkey"
+
+        
     try:
         connection = psycopg2.connect(**DATABASE_CONFIG)
         # Query the "dataHeader" table and load it into a Polars DataFrame
@@ -240,18 +248,20 @@ def subset_and_save(tabledf: pl.DataFrame, table_name: str) -> pl.DataFrame:
         primary_keys = dataHeader_df.select(pl.col("PrimaryKey"))
 
         # Filter tblRHEM_df where PrimaryKey exists in the primary_keys list
-        matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="inner")
+        matching_df = table_df.join(primary_keys, on="PrimaryKey", how="inner")
 
         # Filter tblRHEM_df where PrimaryKey does not exist in the primary_keys list
-        non_matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="anti")
+        non_matching_df = table_df.join(primary_keys, on="PrimaryKey", how="anti")
 
         # Save the non-matching part to a CSV file
-        non_matching_csv_file = os.path.join(NOPRIMARYKEYPATH,f"no_primarykeys_{table_name}.csv")
+        non_matching_csv_file = os.path.join(NOPRIMARYKEYPATH,f"no_primarykeys_{dbkey}_{table_name}.csv")
         if non_matching_df.shape[0] != 0:
             non_matching_df.write_csv(non_matching_csv_file)
 
         # Return the matching subset for ingestion
         return matching_df
+    except Exception as e:
+        logger.info(f"db_connector::subset_pk:: error: {e}")
     finally:
         connection.close()
 
@@ -288,6 +298,9 @@ def populate_datevisited(table_df: pl.DataFrame, table_name: str) -> pl.DataFram
 
         # Return the updated DataFrame with the DateVisited column populated
         return merged_df
+    except Exception as e:
+        logger.info(f"db_connector::populate_datevisited:: error: {e}")
+
 
     finally:
         connection.close()

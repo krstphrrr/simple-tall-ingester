@@ -17,7 +17,7 @@ def process_csv(file_name: str, project_key: str = None):
     table_name = os.path.splitext(filename)[0]
 
     # validate with schemaplan
-    csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=10000)
+    csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=100000)
     csv_df = dataframe_validator(csv_df, table_name)
 
     if csv_df is not None:
@@ -37,15 +37,23 @@ def process_csv(file_name: str, project_key: str = None):
             else:
                 logger.info("data_loader:: \"ProjectKey\" not found, proceeding with null \"ProjectKey\" column.")
         """
-        - need correct date visited
-            - pull 
-        - need to trim non-headers to fit 
-            - save the non-header part that did not have pk's that correspond w header 
+        - do we want to slowly check if the subset of primary keys we are about to ingest
+        exist already in dataheader? if so:
+            - we continue with no further checks 
+
+        - do we want to *only* check for primarykey matches if the table about to be ingested
+        did not come with an accompanying dataheader??? if so, add: 
+            - if len([i for i in os.listdir(DATA_DIR) if 'dataHeader' in i])==0:
+            - this will check if there is an accopanying dataheader.csv inside the datadir,
+            only proceed if the dataheader is missing
+            - the point is double check that the table we are ingesting maintains relational
+            integrity with dataheader be it as the datapacket itself does not include a dataheader
         """
         if "dataHeader" not in table_name:
+            # add ^^^ change here
             csv_df = subset_and_save(csv_df, table_name)
-        
- 
+
+
         csv_df = create_postgis_geometry(csv_df)
         csv_df = dateloadedfix(csv_df)
         csv_df = deduplicate_dataframe(csv_df)
@@ -56,7 +64,9 @@ def process_csv(file_name: str, project_key: str = None):
         csv_df = bitfix(csv_df, scheme)
 
         if "DateVisited" in csv_df.columns and "dataHeader" not in table_name:
-            csv_df = populate_datevisited(csv_df,table_name)
+            if csv_df[0].select(pl.col("DateVisited").unique())[0,0] is None:
+                logger.info(f"data_loader:: populating datevisited on {table_name} (found None)")
+                csv_df = populate_datevisited(csv_df,table_name)
 
         # Insert the DataFrame into the target table (includes table creation)
         return {

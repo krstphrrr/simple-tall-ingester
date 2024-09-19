@@ -23,8 +23,8 @@ def generate_unique_constraint_query(table_name: str) -> str:
         "dataGap": ["PrimaryKey","LineKey", "RecKey", "SeqNo", "Gap", "RecType"],
         "dataHeight": ["PrimaryKey","LineKey", "RecKey", "PointLoc", "PointNbr", "type"],
         "dataHorizontalFlux": ["PrimaryKey","BoxID", "StackID"],
-        "dataLPI": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
-        "dataSoilStability": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
+        "dataLPI": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc", "PointNbr"],
+        "dataSoilStability": ["PrimaryKey","LineKey", "RecKey", "Position","Pos", "Veg"],
         "dataSpeciesInventory": ["PrimaryKey","LineKey", "RecKey", "Species"],
         "geoSpecies": ["PrimaryKey","DBKey", "ProjectKey", "Species"],
 
