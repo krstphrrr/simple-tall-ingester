@@ -7,7 +7,7 @@ from config import SCHEMAPLAN_PATH, PROJECTFILE_PATH
 from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix, add_or_update_project_key
 from scripts.utils import schema_to_dictionary
 from scripts.data_validator import dataframe_validator
-from scripts.db_connector import insert_project, subset_and_save
+from scripts.db_connector import insert_project, subset_and_save, populate_datevisited
 
 logger = logging.getLogger(__name__)
 
@@ -30,21 +30,22 @@ def process_csv(file_name: str, project_key: str = None):
         if project_key is not None:
             csv_df = add_or_update_project_key(csv_df, project_key)
         else:
-            logger.info("Project xlsx not found within data directory. Scanning for \"ProjectKey\" within dataframe..")
+            logger.info("data_loader:: Project xlsx not found within data directory. Scanning for \"ProjectKey\" within dataframe..")
             if "ProjectKey" in csv_df.columns and csv_df[0].select(pl.col("ProjectKey").unique())[0,0] is not None:
                 existing_project_key = csv_df[0].select(pl.col("ProjectKey").unique())[0,0]
-                logger.info(f'Using "ProjectKey" = {existing_project_key} found within csv')
+                logger.info(f'data_loader:: Using "ProjectKey" = {existing_project_key} found within csv')
             else:
-                logger.info("\"ProjectKey\" not found, proceeding with null \"ProjectKey\" column.")
+                logger.info("data_loader:: \"ProjectKey\" not found, proceeding with null \"ProjectKey\" column.")
         """
         - need correct date visited
             - pull 
         - need to trim non-headers to fit 
             - save the non-header part that did not have pk's that correspond w header 
         """
-        if "tblRHEM" in table_name:
+        if "dataHeader" not in table_name:
             csv_df = subset_and_save(csv_df, table_name)
-
+        
+ 
         csv_df = create_postgis_geometry(csv_df)
         csv_df = dateloadedfix(csv_df)
         csv_df = deduplicate_dataframe(csv_df)
@@ -53,6 +54,9 @@ def process_csv(file_name: str, project_key: str = None):
         csv_df = numericfix(csv_df,scheme)
         csv_df = integerfix(csv_df,scheme)
         csv_df = bitfix(csv_df, scheme)
+
+        if "DateVisited" in csv_df.columns and "dataHeader" not in table_name:
+            csv_df = populate_datevisited(csv_df,table_name)
 
         # Insert the DataFrame into the target table (includes table creation)
         return {
@@ -75,7 +79,7 @@ def load_projecttable(excel_path: str, table_name: str):
     # Create table/insert data
     insert_project(values, column_names, table_name)
 
-    logger.info(f"Data inserted successfully into {table_name}")
+    logger.info(f"data_loader:: Data inserted successfully into {table_name}")
 
 def projectkey_extract():
     # load project path

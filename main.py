@@ -1,5 +1,6 @@
 from scripts.data_loader import process_csv, projectkey_extract, load_projecttable
 from scripts.db_connector import insert_dataframe_to_db
+from scripts.utils import generate_unique_constraint_query
 from config import DATA_DIR
 import logging
 import cmd
@@ -31,6 +32,7 @@ class TallIngester(cmd.Cmd):
         project_file = [file_name for file_name in os.listdir(data_dir) if file_name.endswith(".xlsx") and 'project' in file_name]
 
         if len(project_file)>0:
+            logger.info("main:: project xlsx found, extracting projectkey")
             projectpath = os.path.join(DATA_DIR,project_file[0])
             load_projecttable(projectpath, 'tblProjects')
             project_key = projectkey_extract()
@@ -42,16 +44,34 @@ class TallIngester(cmd.Cmd):
             df = result['dataframe']
             table_name = result['table_name']
             insert_dataframe_to_db(df, table_name)
-            logger.info(f"Ingested file: dataHeader.csv into table \"{table_name}\" ")
+            logger.info(f"main:: Ingested file: dataHeader.csv into table \"{table_name}\" ")
             csv_files.remove("dataHeader.csv")  # Remove it from the list to avoid reprocessing
 
         # Process remaining CSV files
         for file_name in csv_files:
             file_path = os.path.join(data_dir, file_name)
-            result = process_csv(file_path)
+            result = process_csv(file_path, project_key)
             df = result['dataframe']
             table_name = result['table_name']
             insert_dataframe_to_db(df, table_name)
+    
+    def do_generate(self, arg):
+        """
+        Command to generate a unique constraint for a given table.
+        Usage: generate unique <tablename>
+        """
+        args = arg.split()
+        
+        if len(args) == 2 and args[0] == 'unique':
+            table_name = args[1]
+            try:
+                query = generate_unique_constraint_query(table_name)
+                print(f"Generated unique constraint query for table {table_name}:\n{query}")
+            
+            except Exception as e:
+                print(f"Error generating unique constraint: {e}")
+        else:
+            print("Usage: generate unique <tablename>")
 
 
 

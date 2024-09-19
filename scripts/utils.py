@@ -25,8 +25,8 @@ def generate_unique_constraint_query(table_name: str) -> str:
         "dataHorizontalFlux": ["PrimaryKey","BoxID", "StackID"],
         "dataLPI": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
         "dataSoilStability": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
-        "dataSpeciesInventory": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
-        "geoSpecies": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc"],
+        "dataSpeciesInventory": ["PrimaryKey","LineKey", "RecKey", "Species"],
+        "geoSpecies": ["PrimaryKey","DBKey", "ProjectKey", "Species"],
 
         # primary key exclusives
         "geoIndicators": ["PrimaryKey"],
@@ -84,7 +84,7 @@ def map_pg_type_to_polars(pg_type: str) -> pl.DataType:
         "time": pl.Time,
         "time without time zone": pl.Time,
         "time with time zone": pl.Time,
-        "json": pl.Object,  # or pl.Utf8 if you want to keep it as string
+        "json": pl.Object,  # or pl.Utf8 
         "jsonb": pl.Object,  # or pl.Utf8
         "uuid": pl.Utf8,
         "bytea": pl.Binary,

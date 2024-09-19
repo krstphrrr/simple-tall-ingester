@@ -20,40 +20,8 @@ def map_dtype_to_sql(dtype: pl.DataType) -> str:
         return "DATE"
     else:
         return "TEXT"
-    
 
-def subset_and_save(tabledf: pl.DataFrame, table_name: str) -> pl.DataFrame:
-    logger.info(f'Matching "PrimaryKeys" with header.. a subset of "{table_name}" will be produced in the ./noprimarykey dir if mismatches are found.')
-    # if dbkey is required, add extraction here here
-    try:
-        connection = psycopg2.connect(**DATABASE_CONFIG)
-        # Query the "dataHeader" table and load it into a Polars DataFrame
-        query = f'SELECT "PrimaryKey" FROM {DBSCHEMA}."dataHeader";'
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            # Fetch all results into a DataFrame
-            data = cursor.fetchall()
-            dataHeader_df = pl.DataFrame(data, orient="row", schema=["PrimaryKey"])
-            cursor.close()
-    
-        # Extract the unique PrimaryKey values from the dataHeader DataFrame
-        primary_keys = dataHeader_df.select(pl.col("PrimaryKey"))
 
-        # Filter tblRHEM_df where PrimaryKey exists in the primary_keys list
-        matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="inner")
-
-        # Filter tblRHEM_df where PrimaryKey does not exist in the primary_keys list
-        non_matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="anti")
-
-        # Save the non-matching part to a CSV file
-        non_matching_csv_file = os.path.join(NOPRIMARYKEYPATH,f"no_primarykeys_{table_name}.csv")
-        non_matching_df.write_csv(non_matching_csv_file)
-
-        # Return the matching subset for ingestion
-        return matching_df
-    finally:
-        #  Ensure the connection is closed
-        connection.close()
 
 def create_table_if_not_exists(table_name: str):
     conn = None
@@ -86,14 +54,7 @@ def create_table_if_not_exists(table_name: str):
 
         cursor.execute(create_table_query)
         conn.commit()
-        #
-        # # Create an index on the 'rid' column
-        cursor.execute(f'CREATE INDEX IF NOT EXISTS {table_name}_rid_idx ON {DBSCHEMA}."{table_name}" (rid);')
-        conn.commit()
 
-        unique_constraint_query = generate_unique_constraint_query(table_name)
-        cursor.execute(unique_constraint_query)
-        cursor.commit()
 
         cursor.close()
 
@@ -108,8 +69,48 @@ def create_table_if_not_exists(table_name: str):
             conn.close()
 
 
+def create_index_if_not_exist(table_name):
+    conn = None
+    try:
+
+        conn = psycopg2.connect(**DATABASE_CONFIG)
+        cursor = conn.cursor()
+        cursor.execute(f'CREATE INDEX IF NOT EXISTS {table_name}_rid_idx ON {DBSCHEMA}."{table_name}" (rid);')
+        conn.commit()
+
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.info(f"db_connector::create_index:: Error creating index on {table_name}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def create_unique_constraint_if_not_exist(table_name):
+    conn = None
+    try:
+
+        conn = psycopg2.connect(**DATABASE_CONFIG)
+        cursor = conn.cursor()
+        unique_constraint_query = generate_unique_constraint_query(table_name)
+        cursor.execute(unique_constraint_query)
+        conn.commit()
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        logger.info(f"db_connector::create_unique:: Error creating unique constraint on {table_name}: {e}")
+    finally:
+        if conn:
+            conn.close()
+
 def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326):
     create_table_if_not_exists(table_name)  # Ensure table exists before inserting data
+    create_index_if_not_exist(table_name)
+    create_unique_constraint_if_not_exist(table_name)
 
     conn = None
     try:
@@ -186,7 +187,7 @@ def create_projecttable(columns: list[str], tablename: str):
         if conn:
             conn.rollback()
 
-        logger.info(f"Error creating table {tablename}: {e}")
+        logger.info(f"db_connector::create_project:: Error creating table {tablename}: {e}")
     finally:
         if conn:
             conn.close()
@@ -221,3 +222,72 @@ def insert_project(values: list[str], columns: list[str], tablename: str):
     finally:
         if conn:
             conn.close()
+
+def subset_and_save(tabledf: pl.DataFrame, table_name: str) -> pl.DataFrame:
+    logger.info(f'db_connector: Matching "PrimaryKeys" with header.. a subset of "{table_name}" will be produced in the ./noprimarykey dir if mismatches are found.')
+    # if dbkey is required, add extraction here here
+    try:
+        connection = psycopg2.connect(**DATABASE_CONFIG)
+        # Query the "dataHeader" table and load it into a Polars DataFrame
+        query = f'SELECT "PrimaryKey" FROM {DBSCHEMA}."dataHeader";'
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            # Fetch all results into a DataFrame
+            data = cursor.fetchall()
+            dataHeader_df = pl.DataFrame(data, orient="row", schema=["PrimaryKey"])
+
+        # Extract the unique PrimaryKey values from the dataHeader DataFrame
+        primary_keys = dataHeader_df.select(pl.col("PrimaryKey"))
+
+        # Filter tblRHEM_df where PrimaryKey exists in the primary_keys list
+        matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="inner")
+
+        # Filter tblRHEM_df where PrimaryKey does not exist in the primary_keys list
+        non_matching_df = tabledf.join(primary_keys, on="PrimaryKey", how="anti")
+
+        # Save the non-matching part to a CSV file
+        non_matching_csv_file = os.path.join(NOPRIMARYKEYPATH,f"no_primarykeys_{table_name}.csv")
+        if non_matching_df.shape[0] != 0:
+            non_matching_df.write_csv(non_matching_csv_file)
+
+        # Return the matching subset for ingestion
+        return matching_df
+    finally:
+        connection.close()
+
+
+def populate_datevisited(table_df: pl.DataFrame, table_name: str) -> pl.DataFrame:
+    logger.info(f'db_connector: Matching "DateVisited" on {table_name} to dataheader...')
+
+
+    try:
+        connection = psycopg2.connect(**DATABASE_CONFIG)
+        query = f'SELECT "PrimaryKey", "DateVisited" FROM {DBSCHEMA}."dataHeader";'
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            # Fetch all results into a list of tuples
+            data = cursor.fetchall()
+            # Convert to Polars DataFrame
+            dataHeader_df = pl.DataFrame(data, orient="row", schema=["PrimaryKey", "DateVisited"])
+
+        # Join tblRHEM_df with dataHeader_df on "PrimaryKey"
+        merged_df = table_df.join(dataHeader_df, on="PrimaryKey", how="left")
+
+        # If "DateVisited" already exists in tblRHEM, replace only the values that are non-null in dataHeader
+        if "DateVisited" in table_df.columns:
+            # We replace only where the joined DateVisited from dataHeader is non-null
+            merged_df = merged_df.with_columns(
+                pl.when(merged_df["DateVisited_right"].is_not_null())
+                .then(merged_df["DateVisited_right"])
+                .otherwise(merged_df["DateVisited"])  # Retain original DateVisited where no match
+                .alias("DateVisited")  # Ensure the final column is named "DateVisited"
+            ).drop("DateVisited_right")  # Drop the redundant column from dataHeader join
+        else:
+            # If "DateVisited" doesn't exist, just rename the merged "DateVisited_right" column
+            merged_df = merged_df.rename({"DateVisited_right": "DateVisited"})
+
+        # Return the updated DataFrame with the DateVisited column populated
+        return merged_df
+
+    finally:
+        connection.close()
