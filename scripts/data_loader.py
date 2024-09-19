@@ -29,6 +29,20 @@ def process_csv(file_name: str, project_key: str = None):
         # creaate/insert projectkey
         if project_key is not None:
             csv_df = add_or_update_project_key(csv_df, project_key)
+        else:
+            logger.info("Project xlsx not found within data directory. Scanning for \"ProjectKey\" within dataframe..")
+            if "ProjectKey" in csv_df.columns and csv_df[0].select(pl.col("ProjectKey").unique())[0,0] is not None:
+                existing_project_key = csv_df[0].select(pl.col("ProjectKey").unique())[0,0]
+                logger.info(f'Using "ProjectKey" = {existing_project_key} found within csv')
+            else:
+                logger.info("\"ProjectKey\" not found, proceeding with null \"ProjectKey\" column.")
+        """
+        - need correct date visited
+            - pull 
+        - need to trim non-headers to fit 
+            - save the non-header part that did not have pk's that correspond w header 
+        """
+
         csv_df = create_postgis_geometry(csv_df)
         csv_df = dateloadedfix(csv_df)
         csv_df = deduplicate_dataframe(csv_df)

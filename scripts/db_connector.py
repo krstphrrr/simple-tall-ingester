@@ -1,5 +1,6 @@
 import psycopg2
 from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH
+from scripts.utils import generate_unique_constraint_query
 import polars as pl
 import logging
 
@@ -53,6 +54,10 @@ def create_table_if_not_exists(table_name: str):
         # # Create an index on the 'rid' column
         cursor.execute(f'CREATE INDEX IF NOT EXISTS {table_name}_rid_idx ON {DBSCHEMA}."{table_name}" (rid);')
         conn.commit()
+
+        unique_constraint_query = generate_unique_constraint_query(table_name)
+        cursor.execute(unique_constraint_query)
+        cursor.commit()
 
         cursor.close()
 

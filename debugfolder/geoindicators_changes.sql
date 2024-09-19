@@ -21,3 +21,6 @@ END $$;
 -- add new column
 ALTER TABLE public_test.geoIndicators
 ADD COLUMN "AH_AnnForbGraminoidCover" double precision;
+
+ALTER TABLE public_test."geoIndicators" 
+ADD COLUMN "AH_AnnForbCover" double precision;

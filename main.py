@@ -34,6 +34,7 @@ class TallIngester(cmd.Cmd):
             projectpath = os.path.join(DATA_DIR,project_file[0])
             load_projecttable(projectpath, 'tblProjects')
             project_key = projectkey_extract()
+
         # Check if "dataHeader.csv" exists and process it first
         if "dataHeader.csv" in csv_files:
             file_path = os.path.join(data_dir, "dataHeader.csv")
