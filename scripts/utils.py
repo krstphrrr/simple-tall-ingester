@@ -36,7 +36,7 @@ def generate_unique_constraint_query(table_name: str) -> str:
         "dataDustDeposition": ["PrimaryKey"],
         "dataPlotCharacterization": ["PrimaryKey"],
         "dataSoilHorizons": ["PrimaryKey"],
-        "tblRHEM": ["PrimaryKey"],
+        "tblRHEM": ["PrimaryKey","Precipitation_Long_Term_MEAN", "Runoff_Long_Term_MEAN"],
         # Add more table names and their respective unique constraint columns
     }
 

@@ -1,7 +1,7 @@
 from scripts.data_loader import process_csv, projectkey_extract, load_projecttable
 from scripts.db_connector import insert_dataframe_to_db
-from scripts.utils import generate_unique_constraint_query
-from config import DATA_DIR
+# from scripts.utils import generate_unique_constraint_query
+from config import DATA_DIR, DATABASE_CONFIG, SCHEMAPLAN_PATH, DBSCHEMA
 import logging
 import cmd
 import os
@@ -24,6 +24,24 @@ class TallIngester(cmd.Cmd):
         if 'debug' in arg.split():
             logging.getLogger().setLevel(logging.DEBUG)  # Set root logger to DEBUG level
             logger.debug('Debug mode enabled.')
+
+        # Ask for confirmation on TABLE_SCHEMA
+        table_schema_confirm = input(f'Ingesting to TABLE_SCHEMA: {DBSCHEMA}. Continue? (y/n): ').strip().lower()
+        if table_schema_confirm != 'y':
+            logger.info("Aborting ingestion. Please update the TABLE_SCHEMA configuration.")
+            return  # Exit the function if the user does not confirm
+
+        # Ask for confirmation on DATABASE_CONFIG.host
+        db_host_confirm = input(f'Ingesting to database: {DATABASE_CONFIG['host']}. Continue? (y/n): ').strip().lower()
+        if db_host_confirm != 'y':
+            logger.info("Aborting ingestion. Please update the DATABASE_CONFIG.host configuration.")
+            return  # Exit the function if the user does not confirm
+
+        # Ask for confirmation on SCHEMAPLAN_PATH
+        schema_plan_confirm = input(f'Ingesting using SCHEMAPLAN: "{os.path.basename(SCHEMAPLAN_PATH)}". Continue? (y/n): ').strip().lower()
+        if schema_plan_confirm != 'y':
+            logger.info("Aborting ingestion. Please update the SCHEMAPLAN_PATH configuration.")
+            return  # Exit the function if the user does not confirm
 
         data_dir = DATA_DIR
 
@@ -54,24 +72,24 @@ class TallIngester(cmd.Cmd):
             df = result['dataframe']
             table_name = result['table_name']
             insert_dataframe_to_db(df, table_name)
-    
-    def do_generate(self, arg):
-        """
-        Command to generate a unique constraint for a given table.
-        Usage: generate unique <tablename>
-        """
-        args = arg.split()
-        
-        if len(args) == 2 and args[0] == 'unique':
-            table_name = args[1]
-            try:
-                query = generate_unique_constraint_query(table_name)
-                print(f"Generated unique constraint query for table {table_name}:\n{query}")
-            
-            except Exception as e:
-                print(f"Error generating unique constraint: {e}")
-        else:
-            print("Usage: generate unique <tablename>")
+
+    # def do_generate(self, arg):
+    #     """
+    #     Command to generate a unique constraint for a given table.
+    #     Usage: generate unique <tablename>
+    #     """
+    #     args = arg.split()
+
+    #     if len(args) == 2 and args[0] == 'unique':
+    #         table_name = args[1]
+    #         try:
+    #             query = generate_unique_constraint_query(table_name)
+    #             print(f"Generated unique constraint query for table {table_name}:\n{query}")
+
+    #         except Exception as e:
+    #             print(f"Error generating unique constraint: {e}")
+    #     else:
+    #         print("Usage: generate unique <tablename>")
 
 
 

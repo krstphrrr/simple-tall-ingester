@@ -228,7 +228,7 @@ def subset_and_save(table_df: pl.DataFrame, table_name: str) -> pl.DataFrame:
     # if dbkey is required, add extraction here here
     # dbkey check and add for csv's with not primarykeys
     dbkey = None
-    if "DBKey" in table_df.colums:
+    if "DBKey" in table_df.columns:
         dbkey = table_df[0].select(pl.col("DBKey").unique())[0,0]
     else:
         dbkey="nodbkey"

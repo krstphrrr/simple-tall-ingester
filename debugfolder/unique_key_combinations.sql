@@ -107,3 +107,8 @@ AND "DBKey" = '2020'
 AND "ProjectKey" = 'BLM_AIM'
 AND "Species" = 'LEPTO22'
 -- Only differ in duration
+
+
+-- ALTER TABLE public_test."tblRHEM" 
+-- ADD CONSTRAINT unique_tblrhemprimarykey_column 
+-- UNIQUE ("PrimaryKey","Precipitation_Long_Term_MEAN", "Runoff_Long_Term_MEAN");
