@@ -52,7 +52,7 @@ class TallIngester(cmd.Cmd):
         if len(project_file)>0:
             logger.info("main:: project xlsx found, extracting projectkey")
             projectpath = os.path.join(DATA_DIR,project_file[0])
-            load_projecttable(projectpath, 'tblProjects')
+            load_projecttable(projectpath, 'tblProject')
             project_key = projectkey_extract()
 
         # Check if "dataHeader.csv" exists and process it first

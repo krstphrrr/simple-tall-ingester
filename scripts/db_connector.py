@@ -265,42 +265,67 @@ def subset_and_save(table_df: pl.DataFrame, table_name: str) -> pl.DataFrame:
     finally:
         connection.close()
 
-
 def populate_datevisited(table_df: pl.DataFrame, table_name: str) -> pl.DataFrame:
-    logger.info(f'db_connector: Matching "DateVisited" on {table_name} to dataheader...')
-
-
+    logger.info(f'db_connector: Matching "DateVisited" on {table_name} to dataHeader...')
+    
     try:
         connection = psycopg2.connect(**DATABASE_CONFIG)
-        query = f'SELECT "PrimaryKey", "DateVisited" FROM {DBSCHEMA}."dataHeader";'
-        with connection.cursor() as cursor:
-            cursor.execute(query)
-            # Fetch all results into a list of tuples
-            data = cursor.fetchall()
-            # Convert to Polars DataFrame
-            dataHeader_df = pl.DataFrame(data, orient="row", schema=["PrimaryKey", "DateVisited"])
+        primary_keys = table_df["PrimaryKey"].to_list()
 
-        # Join tblRHEM_df with dataHeader_df on "PrimaryKey"
-        merged_df = table_df.join(dataHeader_df, on="PrimaryKey", how="left")
+        # Define batch size
+        batch_size = 1000  # Process 1000 primary keys at a time
+        total_batches = (len(primary_keys) + batch_size - 1) // batch_size  # Calculate total number of batches
+        dataHeader_dfs = []
 
-        # If "DateVisited" already exists in tblRHEM, replace only the values that are non-null in dataHeader
+        # Process in batches
+        for i in range(0, len(primary_keys), batch_size):
+            batch_keys = primary_keys[i:i + batch_size]
+
+            # Generate a SQL query to fetch only the relevant rows from dataHeader
+            placeholders = ', '.join(['%s'] * len(batch_keys))  # Prepare placeholders for the IN clause
+            query = f'SELECT "PrimaryKey", "DateVisited" FROM {DBSCHEMA}."dataHeader" WHERE "PrimaryKey" IN ({placeholders});'
+            
+            with connection.cursor() as cursor:
+                cursor.execute(query, batch_keys)
+                data = cursor.fetchall()
+                
+                if data:  # Only process if data was returned
+                    dataHeader_df = pl.DataFrame(data, schema=["PrimaryKey", "DateVisited"])
+                    dataHeader_dfs.append(dataHeader_df)
+
+            # Log the progress of each batch
+            current_batch = (i // batch_size) + 1
+            logger.info(f'Processed batch {current_batch} of {total_batches} ({len(batch_keys)} records).')
+
+        # Combine all batch DataFrames into one
+        if dataHeader_dfs:
+            dataHeader_combined_df = pl.concat(dataHeader_dfs, how="vertical")
+        else:
+            logger.warning("No matching primary keys found in dataHeader.")
+            return table_df  # No matches found, return the original DataFrame
+
+        # Perform the join with the combined dataHeader DataFrame
+        merged_df = table_df.join(dataHeader_combined_df, on="PrimaryKey", how="left")
+
+        # Handle updating or renaming the "DateVisited" column
         if "DateVisited" in table_df.columns:
-            # We replace only where the joined DateVisited from dataHeader is non-null
+            # Replace only where the joined DateVisited from dataHeader is non-null
             merged_df = merged_df.with_columns(
                 pl.when(merged_df["DateVisited_right"].is_not_null())
                 .then(merged_df["DateVisited_right"])
                 .otherwise(merged_df["DateVisited"])  # Retain original DateVisited where no match
-                .alias("DateVisited")  # Ensure the final column is named "DateVisited"
-            ).drop("DateVisited_right")  # Drop the redundant column from dataHeader join
+                .alias("DateVisited")
+            ).drop("DateVisited_right")
         else:
             # If "DateVisited" doesn't exist, just rename the merged "DateVisited_right" column
             merged_df = merged_df.rename({"DateVisited_right": "DateVisited"})
 
         # Return the updated DataFrame with the DateVisited column populated
         return merged_df
-    except Exception as e:
-        logger.info(f"db_connector::populate_datevisited:: error: {e}")
 
+    except Exception as e:
+        logger.error(f"db_connector::populate_datevisited:: error: {e}")
+        return table_df  # Return original DataFrame on error
 
     finally:
         connection.close()
