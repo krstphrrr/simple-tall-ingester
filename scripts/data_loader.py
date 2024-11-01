@@ -2,7 +2,6 @@ import polars as pl
 import logging
 import os
 
-
 from config import SCHEMAPLAN_PATH, PROJECTFILE_PATH
 from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix, add_or_update_project_key
 from scripts.utils import schema_to_dictionary
@@ -12,69 +11,80 @@ from scripts.db_connector import insert_project, subset_and_save, populate_datev
 logger = logging.getLogger(__name__)
 
 def process_csv(file_name: str, project_key: str = None):
+    logger.info(f"Starting process_csv function for file: {file_name}")
     # Load the CSV into a DataFrame with schemaplan fields
     filename = os.path.basename(file_name)
     table_name = os.path.splitext(filename)[0]
+    logger.info(f"Extracted table name: {table_name}")
 
-    # validate with schemaplan
-    csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=100000)
-    csv_df = dataframe_validator(csv_df, table_name)
+    try:
+        # Validate with schemaplan
+        logger.info(f"Loading CSV from data/{table_name}.csv")
+        csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=100000)
+        csv_df = dataframe_validator(csv_df, table_name)
+        logger.info(f"DataFrame validated for table: {table_name}")
 
-    if csv_df is not None:
-        # Cleaning functions: populate fields, clean fields etc.
-        # TODOdf = populate datevisited
-        logger.info(f'Working on: "{table_name}"...')
+        if csv_df is not None:
+            # Cleaning functions: populate fields, clean fields, etc.
+            logger.info(f'Working on: "{table_name}"...')
 
-        # add projectkey_populate (which in turn projectkey_extract)
-        # creaate/insert projectkey
-        if project_key is not None:
-            csv_df = add_or_update_project_key(csv_df, project_key)
-        else:
-            logger.info("data_loader:: Project xlsx not found within data directory. Scanning for \"ProjectKey\" within dataframe..")
-            if "ProjectKey" in csv_df.columns and csv_df[0].select(pl.col("ProjectKey").unique())[0,0] is not None:
-                existing_project_key = csv_df[0].select(pl.col("ProjectKey").unique())[0,0]
-                logger.info(f'data_loader:: Using "ProjectKey" = {existing_project_key} found within csv')
+            # Add project_key if provided, otherwise check if present in the DataFrame
+            if project_key is not None:
+                csv_df = add_or_update_project_key(csv_df, project_key)
+                logger.info(f"Project key '{project_key}' added/updated in DataFrame.")
             else:
-                logger.info("data_loader:: \"ProjectKey\" not found, proceeding with null \"ProjectKey\" column.")
-        """
-        - do we want to slowly check if the subset of primary keys we are about to ingest
-        exist already in dataheader? if so:
-            - we continue with no further checks 
+                logger.info("Project key not provided. Checking for existing 'ProjectKey' in DataFrame...")
+                if "ProjectKey" in csv_df.columns and csv_df[0].select(pl.col("ProjectKey").unique())[0, 0] is not None:
+                    existing_project_key = csv_df[0].select(pl.col("ProjectKey").unique())[0, 0]
+                    logger.info(f"Using 'ProjectKey' = {existing_project_key} found within CSV.")
+                else:
+                    logger.info("'ProjectKey' not found, proceeding with null 'ProjectKey' column.")
 
-        - do we want to *only* check for primarykey matches if the table about to be ingested
-        did not come with an accompanying dataheader??? if so, add: 
-            - if len([i for i in os.listdir(DATA_DIR) if 'dataHeader' in i])==0:
-            - this will check if there is an accopanying dataheader.csv inside the datadir,
-            only proceed if the dataheader is missing
-            - the point is double check that the table we are ingesting maintains relational
-            integrity with dataheader be it as the datapacket itself does not include a dataheader
-        """
-        if "dataHeader" not in table_name:
-            # add ^^^ change here
-            csv_df = subset_and_save(csv_df, table_name)
+            # Additional data processing
+            logger.info(f"Creating PostGIS geometry for table: {table_name}")
+            csv_df = create_postgis_geometry(csv_df)
 
+            logger.info(f"Fixing 'DateLoadedInDb' for table: {table_name}")
+            csv_df = dateloadedfix(csv_df)
 
-        csv_df = create_postgis_geometry(csv_df)
-        csv_df = dateloadedfix(csv_df)
-        csv_df = deduplicate_dataframe(csv_df)
+            logger.info(f"Deduplicating DataFrame for table: {table_name}")
+            csv_df = deduplicate_dataframe(csv_df)
 
-        scheme = schema_to_dictionary(table_name)
-        csv_df = numericfix(csv_df,scheme)
-        csv_df = integerfix(csv_df,scheme)
-        csv_df = bitfix(csv_df, scheme)
+            # Apply schema corrections
+            scheme = schema_to_dictionary(table_name)
+            logger.info(f"Applying numeric fix for table: {table_name}")
+            csv_df = numericfix(csv_df, scheme)
 
-        if "DateVisited" in csv_df.columns and "dataHeader" not in table_name:
-            if csv_df[0].select(pl.col("DateVisited").unique())[0,0] is None:
-                logger.info(f"data_loader:: populating datevisited on {table_name} (found None)")
-                csv_df = populate_datevisited(csv_df,table_name)
+            logger.info(f"Applying integer fix for table: {table_name}")
+            csv_df = integerfix(csv_df, scheme)
 
-        # Insert the DataFrame into the target table (includes table creation)
-        return {
-            'table_name': table_name,
-            'dataframe': csv_df
-        }
-        # insert_dataframe_to_db(df, target_table)
-        # logger.info(f"Processed {file_name} into table {target_table} with source {source}.")
+            logger.info(f"Applying bit fix for table: {table_name}")
+            csv_df = bitfix(csv_df, scheme)
+
+            # Populate 'DateVisited' if necessary
+            if "dataHeader" not in table_name:
+                logger.info(f"Not dataHeader! Checking for 'DateVisited' on: {table_name}")
+                if "DateVisited" not in csv_df.columns:
+                    logger.info(f"Adding 'DateVisited' column to table: {table_name}")
+                    csv_df = csv_df.with_columns(pl.lit(None).alias("DateVisited"))
+                if csv_df["DateVisited"].unique().to_list() == [None]:
+                    logger.info(f"Populating 'DateVisited' for table: {table_name} (found None)")
+                    csv_df = populate_datevisited(csv_df, table_name)
+
+            logger.info(f"Finished processing CSV for table: {table_name}")
+
+            # Return the processed DataFrame and table name
+            return {
+                'table_name': table_name,
+                'dataframe': csv_df
+            }
+        else:
+            logger.warning(f"Validation failed for DataFrame of table: {table_name}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error processing CSV for table '{table_name}': {e}")
+        return None
 
 
 def load_projecttable(excel_path: str, table_name: str):

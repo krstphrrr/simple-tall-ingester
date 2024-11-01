@@ -5,8 +5,8 @@ import logging.config
 
 load_dotenv()
 
-DBSCHEMA = "public_prod"
-SCHEMAPLAN_PATH = "./validation_schemas/LDC_SchemaPlan_1.2.3.csv"
+DBSCHEMA = "public_test"
+SCHEMAPLAN_PATH = "./validation_schemas/LDC_SchemaPlan_1.2.4.csv"
 PROJECTFILE_PATH = "./data"
 NOPRIMARYKEYPATH = "./noprimarykey"
 DATABASE_CONFIG = {

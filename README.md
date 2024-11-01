@@ -9,11 +9,11 @@ This Python script is designed to facilitate the ingestion of LDC talltable CSV 
 - [x] Ordered ingestion: `dataHeader` first, followed by the rest of the tables
 - [x] ForeignKey check on table creation
 - [x] projecttable: creation and ingestion
-  - [ ] projectkey unique (no foreign key yet)
-  - [ ] use excel file project_table column to replace whatever is on the dataframe already
-  - [ ] stop ingestion with no projecttable entry, but if exists on projecttable use it for table
-- [ ] reproduce primarykey scheme for non-dataheader/geoindicator tables
-- [ ] how to avoid ingesting same data considering we're using rid's as pk and index
+  - [x] projectkey unique (no foreign key yet)
+  - [x] use excel file project_table column to replace whatever is on the dataframe already
+  - [x] stop ingestion with no projecttable entry, but if exists on projecttable use it for table
+- [x] reproduce primarykey scheme for non-dataheader/geoindicator tables
+- [x] how to avoid ingesting same data considering we're using rid's as pk and index
 
 ## To run
 - Commands:

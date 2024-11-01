@@ -4,3 +4,4 @@ fastexcel
 python-dotenv
 psycopg2
 sqlalchemy
+tqdm
