@@ -73,6 +73,15 @@ def process_csv(file_name: str, project_key: str = None):
 
             logger.info(f"Finished processing CSV for table: {table_name}")
 
+            schemaplankeys = schema_to_dictionary(table_name).keys()
+            schemaplan_less = [col for col in csv_df.columns if col not in schemaplankeys]
+            schemaplan_more = [col for col in schemaplankeys if col not in csv_df.columns]
+            if len(schemaplan_more)>0 or len(schemaplan_less)>0:
+                print(f"there's a mismatch between fields in schemaplan and fields in CSV..")
+                print(f"selecting from schemaplan..")
+                csv_df = csv_df.select(schemaplankeys)
+            
+
             # Return the processed DataFrame and table name
             return {
                 'table_name': table_name,

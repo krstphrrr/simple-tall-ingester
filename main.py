@@ -32,7 +32,7 @@ class TallIngester(cmd.Cmd):
             return  # Exit the function if the user does not confirm
 
         # Ask for confirmation on DATABASE_CONFIG.host
-        db_host_confirm = input(f'Ingesting to database: {DATABASE_CONFIG['host']}. Continue? (y/n): ').strip().lower()
+        db_host_confirm = input(f"Ingesting to database: {DATABASE_CONFIG['host']}. Continue? (y/n): ").strip().lower()
         if db_host_confirm != 'y':
             logger.info("Aborting ingestion. Please update the DATABASE_CONFIG.host configuration.")
             return  # Exit the function if the user does not confirm

@@ -22,6 +22,30 @@ def map_dtype_to_sql(dtype: pl.DataType) -> str:
         return "DATE"
     else:
         return "TEXT"
+    
+def unique_fields_per_table(table_name: str):
+    table_columns = {
+        # already known
+        "dataGap": ["PrimaryKey","LineKey", "RecKey", "SeqNo", "Gap", "RecType"],
+        "dataHeight": ["PrimaryKey", "LineKey", "RecKey","Height", "PointLoc", "PointNbr", "type", "HeightOption", "Direction"],
+        "dataHorizontalFlux": ["PrimaryKey","BoxID", "StackID"],
+        "dataLPI": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc", "PointNbr", "Direction", "chckbox"],
+        "dataSoilStability": ["PrimaryKey","LineKey", "RecKey", "Position","Pos", "Veg"],
+        "dataSpeciesInventory": ["PrimaryKey","LineKey", "RecKey", "Species"],
+        "geoSpecies": ["PrimaryKey","DBKey", "ProjectKey", "Species", "Duration", "GrowthHabit","GrowthHabitSub", "Hgt_Species_Avg_n"],
+
+        # primary key exclusives
+        "geoIndicators": ["PrimaryKey"],
+        "dataHeader": ["PrimaryKey"],
+
+        # to be determined
+        "dataDustDeposition": ["PrimaryKey"],
+        "dataPlotCharacterization": ["PrimaryKey"],
+        "dataSoilHorizons": ["PrimaryKey"],
+        "tblRHEM": ["PrimaryKey","Precipitation_Long_Term_MEAN", "Runoff_Long_Term_MEAN"],
+        # Add more table names and their respective unique constraint columns
+    }
+    return table_columns[table_name]
 
 
 
@@ -144,6 +168,7 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
                 insert_query = f"""
                     INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
                     VALUES ({', '.join(values)})
+                    ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO NOTHING
                     """
 
                 # Prepare the record values, using geometry conversion when necessary
