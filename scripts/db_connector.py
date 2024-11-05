@@ -1,3 +1,4 @@
+from datetime import time
 import psycopg2
 from sqlalchemy import create_engine
 from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH, NOPRIMARYKEYPATH
@@ -10,6 +11,8 @@ import psycopg2
 from psycopg2 import sql
 from tqdm import tqdm
 import math
+import os
+from tempfile import NamedTemporaryFile
 
 logger = logging.getLogger(__name__)
 
@@ -133,64 +136,71 @@ def create_unique_constraint_if_not_exist(table_name):
         if conn:
             conn.close()
 
-def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326, chunk_size: int = 10000):
-    create_table_if_not_exists(table_name)  # Ensure table exists before inserting data
+def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326):
+    create_table_if_not_exists(table_name)  
     create_index_if_not_exist(table_name)
     create_unique_constraint_if_not_exist(table_name)
 
     conn = None
+    csv_file_path = None 
+
     try:
-        # Convert DataFrame to list of tuples for insertion
-        records = df.to_dicts()
-        total_records = len(records)
-        total_chunks = math.ceil(total_records / chunk_size)
 
         conn = psycopg2.connect(**DATABASE_CONFIG)
         cursor = conn.cursor()
 
-        cols = ", ".join([f'"{col}"' for col in df.columns])
 
-        for chunk_idx in tqdm(range(total_chunks), desc="Inserting chunks", unit="chunk"):
-            start_idx = chunk_idx * chunk_size
-            end_idx = min(start_idx + chunk_size, total_records)
-            chunk = records[start_idx:end_idx]
+        cursor.execute(f"""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = '{DBSCHEMA}' AND table_name = '{table_name}' AND column_name <> 'rid'
+        """)
+        columns = [row[0] for row in cursor.fetchall()]
 
-            for record in chunk:
-                values = []
-                for col in df.columns:
-                    if col == geometry_column:
-                        # Use ST_GeomFromText to convert WKT to geometry
-                        values.append(f"ST_SetSRID(ST_GeomFromText(%s), {srid})")
-                    else:
-                        values.append("%s")
+        
+        temp_table_name = f'"{table_name}_temp"'
+        cursor.execute(f"""
+            CREATE TEMP TABLE {temp_table_name} AS 
+            SELECT {', '.join([f'"{i}"' for i in columns])} FROM "{DBSCHEMA}"."{table_name}" LIMIT 0
+        """)
 
-                # Construct the query with dynamic placeholders
-                insert_query = f"""
-                    INSERT INTO {DBSCHEMA}."{table_name}" ({cols})
-                    VALUES ({', '.join(values)})
-                    ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO NOTHING
-                    """
+        
+        with NamedTemporaryFile(delete=False, mode='w', suffix='.csv') as tmp_file:
+            csv_file_path = tmp_file.name
 
-                # Prepare the record values, using geometry conversion when necessary
-                record_values = tuple(record[col] if col != geometry_column else record[col] for col in df.columns)
+        # Write CSV to the file path
+        df.write_csv(csv_file_path)
 
-                # Execute the query
-                cursor.execute(insert_query, record_values)
+        # Load data into the temporary table using COPY
+        with open(csv_file_path, 'r') as f:
+            cursor.copy_expert(f'''
+                COPY {temp_table_name} ({', '.join([f'"{col}"' for col in df.columns])}) FROM STDIN WITH (FORMAT csv, HEADER true);
+            ''', f)
 
-            # Commit after each chunk is processed
-            conn.commit()
+        insert_columns = [col for col in columns if col in df.columns]
+
+        cursor.execute(f'''
+            INSERT INTO "{DBSCHEMA}"."{table_name}" ({', '.join([f'"{col}"' for col in insert_columns])})
+            SELECT {', '.join([f'"{col}"' for col in insert_columns])} FROM {temp_table_name}
+            ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO UPDATE
+            SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in insert_columns if col not in unique_fields_per_table(table_name)])};
+        ''')
+
+        # Commit the changes to the database
+        conn.commit()
 
         cursor.close()
-        logger.info(f"All chunks inserted into table \"{table_name}\".")
+        logger.info(f"Data successfully inserted into table \"{table_name}\" using COPY with conflict handling.")
 
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"Error inserting DataFrame into DB: {e}")
+        logger.error(f"Error inserting DataFrame into DB using COPY: {e}")
     finally:
         if conn:
             conn.close()
-
+        if csv_file_path and os.path.exists(csv_file_path):
+            os.remove(csv_file_path)
 
 def create_projecttable(columns: list[str], tablename: str):
     conn = psycopg2.connect(**DATABASE_CONFIG)
