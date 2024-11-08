@@ -18,8 +18,8 @@ def add_or_update_project_key(csv_df: pl.DataFrame, project_key: str) -> pl.Data
 
     return csv_df
 
-def deduplicate_dataframe(df: pl.DataFrame) -> pl.DataFrame:
-    return df.unique()
+def deduplicate_dataframe(df: pl.DataFrame, subset:list[str]) -> pl.DataFrame:
+    return df.unique(subset=subset)
 
 def dateloadedfix(df: pl.DataFrame) -> pl.DataFrame:
     # current_date = datetime.now().strftime('%Y-%m-%d')
@@ -117,6 +117,16 @@ def bitfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
                     .otherwise(pl.col(i))
                     .alias(i)
                 )
+
+            elif df[i].is_in(["L", "D", ""]).any():
+                df = df.with_columns(
+                    pl.when(pl.col(i) == "D").then(1)
+                    .when(pl.col(i) == "L").then(0)
+                    .when(pl.col(i) == "").then(None)
+                    .otherwise(pl.col(i))
+                    .alias(i)
+                )
+                
 
             elif df[i].is_in(["0", "1"]).any():
                 df = df.with_columns(

@@ -1,4 +1,11 @@
 # Tall table ingestion CLI script
+## updates
+
+v1.0.0-alpha
+While ingesting: BLM_AIM_RW:
+- any new projectkey ingested at tblProjects from either public_test or public_dev will automatically update also the data_access_control table. The api will appropriately protect freshly ingested data automatically. 
+- enforced the same unique constraints used at the database, at the dataframe level
+- added one more variant of the bit operations in datacleaner script
 
 ## Overview
 
@@ -6,6 +13,8 @@ This Python script is designed to facilitate the ingestion of LDC talltable CSV 
 
 
 ## Todo
+
+- [ ] set semver
 - [x] Ordered ingestion: `dataHeader` first, followed by the rest of the tables
 - [x] ForeignKey check on table creation
 - [x] projecttable: creation and ingestion

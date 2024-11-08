@@ -16,6 +16,31 @@ def schema_to_dictionary(tablename):
     schema = schema_chooser(tablename)
     return dict(zip(schema['Field'].to_list(), schema['DataType'].to_list()))
 
+def generate_unique_constraint_standalone(table_name:str) -> list[str]:
+    table_columns = {
+        # already known
+        "dataGap": ["PrimaryKey","LineKey", "RecKey", "SeqNo", "Gap", "RecType"],
+        "dataHeight": ["PrimaryKey", "LineKey", "RecKey","Height", "PointLoc", "PointNbr", "type", "HeightOption", "Direction"],
+        "dataHorizontalFlux": ["PrimaryKey","BoxID", "StackID"],
+        "dataLPI": ["PrimaryKey","LineKey", "RecKey", "layer", "code", "PointLoc", "PointNbr", "Direction", "chckbox"],
+        "dataSoilStability": ["PrimaryKey","LineKey", "RecKey", "Position","Pos", "Veg"],
+        "dataSpeciesInventory": ["PrimaryKey","LineKey", "RecKey", "Species"],
+        "geoSpecies": ["PrimaryKey","DBKey", "ProjectKey", "Species", "Duration", "GrowthHabit","GrowthHabitSub"],
+
+        # primary key exclusives
+        "geoIndicators": ["PrimaryKey"],
+        "dataHeader": ["PrimaryKey"],
+
+        # to be determined
+        "dataDustDeposition": ["PrimaryKey"],
+        "dataPlotCharacterization": ["PrimaryKey"],
+        "dataSoilHorizons": ["PrimaryKey"],
+        "tblRHEM": ["PrimaryKey","Precipitation_Long_Term_MEAN", "Runoff_Long_Term_MEAN"],
+        # Add more table names and their respective unique constraint columns
+    }
+    return table_columns[table_name]
+    
+
 def generate_unique_constraint_query(table_name: str) -> str:
     # Define a mapping of table names to the columns for unique constraints
     table_columns = {

@@ -4,7 +4,7 @@ import os
 
 from config import SCHEMAPLAN_PATH, PROJECTFILE_PATH
 from scripts.data_cleaner import deduplicate_dataframe, bitfix, dateloadedfix, create_postgis_geometry, numericfix, integerfix, add_or_update_project_key
-from scripts.utils import schema_to_dictionary
+from scripts.utils import schema_to_dictionary, generate_unique_constraint_standalone
 from scripts.data_validator import dataframe_validator
 from scripts.db_connector import insert_project, subset_and_save, populate_datevisited
 
@@ -48,7 +48,7 @@ def process_csv(file_name: str, project_key: str = None):
             csv_df = dateloadedfix(csv_df)
 
             logger.info(f"Deduplicating DataFrame for table: {table_name}")
-            csv_df = deduplicate_dataframe(csv_df)
+            csv_df = deduplicate_dataframe(csv_df, generate_unique_constraint_standalone(table_name))
 
             # Apply schema corrections
             scheme = schema_to_dictionary(table_name)
