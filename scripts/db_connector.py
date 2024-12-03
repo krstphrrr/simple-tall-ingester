@@ -25,7 +25,7 @@ def map_dtype_to_sql(dtype: pl.DataType) -> str:
         return "DATE"
     else:
         return "TEXT"
-    
+
 def unique_fields_per_table(table_name: str):
     table_columns = {
         # already known
@@ -137,47 +137,61 @@ def create_unique_constraint_if_not_exist(table_name):
             conn.close()
 
 def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: str = None, srid: int = 4326):
-    create_table_if_not_exists(table_name)  
+    logger.info(f"Starting insertion of DataFrame into table '{table_name}'.")
+    logger.info("Ensuring table, index, and constraints exist.")
+
+    create_table_if_not_exists(table_name)
+    logger.info(f"Checked or created table '{table_name}'.")
+
     create_index_if_not_exist(table_name)
+    logger.info(f"Checked or created index for table '{table_name}'.")
+
     create_unique_constraint_if_not_exist(table_name)
+    logger.info(f"Checked or created unique constraint for table '{table_name}'.")
 
     conn = None
-    csv_file_path = None 
+    csv_file_path = None
 
     try:
-
+        logger.info("Connecting to the database.")
         conn = psycopg2.connect(**DATABASE_CONFIG)
         cursor = conn.cursor()
 
-
+        logger.info(f"Fetching column names for table '{table_name}'.")
         cursor.execute(f"""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name
+            FROM information_schema.columns
             WHERE table_schema = '{DBSCHEMA}' AND table_name = '{table_name}' AND column_name <> 'rid'
         """)
         columns = [row[0] for row in cursor.fetchall()]
+        logger.info(f"Columns found: {columns}")
 
-        
         temp_table_name = f'"{table_name}_temp"'
+        logger.info(f"Creating temporary table '{temp_table_name}'.")
         cursor.execute(f"""
-            CREATE TEMP TABLE {temp_table_name} AS 
+            CREATE TEMP TABLE {temp_table_name} AS
             SELECT {', '.join([f'"{i}"' for i in columns])} FROM "{DBSCHEMA}"."{table_name}" LIMIT 0
         """)
+        logger.info(f"Temporary table '{temp_table_name}' created.")
 
-        
+        logger.info("Creating temporary CSV file for data insertion.")
         with NamedTemporaryFile(delete=False, mode='w', suffix='.csv') as tmp_file:
             csv_file_path = tmp_file.name
+        logger.info(f"Temporary CSV file created at '{csv_file_path}'.")
 
-        # Write CSV to the file path
+        logger.info("Writing DataFrame to CSV.")
         df.write_csv(csv_file_path)
 
-        # Load data into the temporary table using COPY
+        logger.info("Loading data into the temporary table using COPY.")
         with open(csv_file_path, 'r') as f:
             cursor.copy_expert(f'''
                 COPY {temp_table_name} ({', '.join([f'"{col}"' for col in df.columns])}) FROM STDIN WITH (FORMAT csv, HEADER true);
             ''', f)
+        logger.info("Data loaded into the temporary table.")
 
+        logger.info("Preparing data for insertion or update into the target table.")
         insert_columns = [col for col in columns if col in df.columns]
+        logger.info(f"Columns to be inserted: {insert_columns}")
 
         cursor.execute(f'''
             INSERT INTO "{DBSCHEMA}"."{table_name}" ({', '.join([f'"{col}"' for col in insert_columns])})
@@ -185,22 +199,25 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
             ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO UPDATE
             SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in insert_columns if col not in unique_fields_per_table(table_name)])};
         ''')
+        logger.info(f"Data inserted into table '{table_name}' with conflict handling.")
 
-        # Commit the changes to the database
         conn.commit()
+        logger.info("Transaction committed.")
 
         cursor.close()
-        logger.info(f"Data successfully inserted into table \"{table_name}\" using COPY with conflict handling.")
-
+        logger.info(f"Data insertion into '{table_name}' completed successfully.")
     except Exception as e:
         if conn:
             conn.rollback()
+            logger.warning("Transaction rolled back due to error.")
         logger.error(f"Error inserting DataFrame into DB using COPY: {e}")
     finally:
         if conn:
             conn.close()
+            logger.info("Database connection closed.")
         if csv_file_path and os.path.exists(csv_file_path):
             os.remove(csv_file_path)
+            logger.info(f"Temporary CSV file '{csv_file_path}' removed.")
 
 def create_projecttable(columns: list[str], tablename: str):
     conn = psycopg2.connect(**DATABASE_CONFIG)

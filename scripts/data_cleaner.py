@@ -89,7 +89,7 @@ def integerfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
                 pl.col(i).cast(pl.Int64).alias(i)
             )
         # if column SHOULD be integer, but is numeric
-        elif colscheme[i].lower() == 'numeric' and df[i].dtype==pl.Float64:
+        elif colscheme[i].lower() == 'integer' and df[i].dtype==pl.Float64:
             logging.debug(f'data_cleaner.integerfix is casting col "{i}" from numeric to integer')
             df = df.with_columns(
                 pl.col(i).cast(pl.Int64).alias(i)
@@ -126,7 +126,7 @@ def bitfix(df: pl.DataFrame, colscheme: dict) -> pl.DataFrame:
                     .otherwise(pl.col(i))
                     .alias(i)
                 )
-                
+
 
             elif df[i].is_in(["0", "1"]).any():
                 df = df.with_columns(
