@@ -1,17 +1,16 @@
+from csv import DictWriter
 from datetime import time
+import sys
 import psycopg2
 from sqlalchemy import create_engine
+import os
+
 from config import DATABASE_CONFIG, DBSCHEMA, SCHEMAPLAN_PATH, NOPRIMARYKEYPATH
 from scripts.utils import generate_unique_constraint_query
 import polars as pl
 import logging
-import os
 
-import psycopg2
 from psycopg2 import sql
-from tqdm import tqdm
-import math
-import os
 from tempfile import NamedTemporaryFile
 
 logger = logging.getLogger(__name__)
@@ -174,38 +173,82 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
         """)
         logger.info(f"Temporary table '{temp_table_name}' created.")
 
-        logger.info("Creating temporary CSV file for data insertion.")
-        with NamedTemporaryFile(delete=False, mode='w', suffix='.csv') as tmp_file:
-            csv_file_path = tmp_file.name
-        logger.info(f"Temporary CSV file created at '{csv_file_path}'.")
+        batch_files = []  # Keep track of created batch file paths
 
-        logger.info("Writing DataFrame to CSV.")
-        df.write_csv(csv_file_path)
+        try:
+            logger.info("Writing DataFrame to CSV in batches.")
 
-        logger.info("Loading data into the temporary table using COPY.")
-        with open(csv_file_path, 'r') as f:
-            cursor.copy_expert(f'''
-                COPY {temp_table_name} ({', '.join([f'"{col}"' for col in df.columns])}) FROM STDIN WITH (FORMAT csv, HEADER true);
-            ''', f)
-        logger.info("Data loaded into the temporary table.")
+            batch_size = 10000  # adjust as needed
+            num_chunks = (len(df) + batch_size - 1) // batch_size
 
-        logger.info("Preparing data for insertion or update into the target table.")
-        insert_columns = [col for col in columns if col in df.columns]
-        logger.info(f"Columns to be inserted: {insert_columns}")
+            for i in range(num_chunks):
+                chunk = pl.DataFrame(df[i * batch_size:(i + 1) * batch_size])
 
-        cursor.execute(f'''
-            INSERT INTO "{DBSCHEMA}"."{table_name}" ({', '.join([f'"{col}"' for col in insert_columns])})
-            SELECT {', '.join([f'"{col}"' for col in insert_columns])} FROM {temp_table_name}
-            ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO UPDATE
-            SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in insert_columns if col not in unique_fields_per_table(table_name)])};
-        ''')
-        logger.info(f"Data inserted into table '{table_name}' with conflict handling.")
+                logger.info(f"Processing batch {i + 1}/{num_chunks}, DataFrame type: {type(chunk)}")
 
-        conn.commit()
-        logger.info("Transaction committed.")
+                # Align chunk columns with database schema
+                aligned_columns = [col for col in columns if col in chunk.columns]
+                missing_columns = [col for col in columns if col not in chunk.columns]
+
+                logger.debug(f"Aligned columns: {aligned_columns}")
+                logger.debug(f"Missing columns: {missing_columns}")
+
+                for missing_col in missing_columns:
+                    chunk = chunk.with_columns(pl.lit(None).alias(missing_col)) 
+
+                logger.debug(f"Type of chunk after adding missing columns: {type(chunk)}")
+                logger.debug(f"Chunk schema after alignment: {chunk.schema}")
+
+                chunk = chunk.select(aligned_columns)
+                # Write the chunk to CSV
+                with NamedTemporaryFile(delete=False, mode='w', suffix=f'_batch_{i}.csv') as tmp_file:
+                    batch_csv_file_path = tmp_file.name
+                    batch_files.append(batch_csv_file_path)
+
+                with open(batch_csv_file_path, 'w', newline='', encoding='utf-8') as f:
+                    writer = DictWriter(f, fieldnames=aligned_columns)  # database schema ordering
+                    writer.writeheader()
+                    writer.writerows(chunk.to_dicts())
+                logger.info(f"Batch file '{batch_csv_file_path}' created and aligned.")
+
+            # Perform the COPY operation and insert each batch directly into the main table
+            for batch_csv_file_path in batch_files:
+                with open(batch_csv_file_path, 'r', encoding='utf-8') as f:
+                    logger.info(f"Loading batch file '{batch_csv_file_path}' into temporary table.")
+                    cursor.copy_expert(f'''
+                        COPY {temp_table_name} ({', '.join([f'"{col}"' for col in aligned_columns])}) FROM STDIN WITH (FORMAT csv, HEADER true);
+                    ''', f)
+
+                logger.info(f"Inserting batch from temp table into target table '{table_name}'.")
+                cursor.execute(f'''
+                    INSERT INTO "{DBSCHEMA}"."{table_name}" ({', '.join([f'"{col}"' for col in aligned_columns])})
+                    SELECT {', '.join([f'"{col}"' for col in aligned_columns])} FROM {temp_table_name}
+                    ON CONFLICT ({', '.join([f'"{i}"' for i in unique_fields_per_table(table_name)])}) DO UPDATE
+                    SET {', '.join([f'"{col}" = EXCLUDED."{col}"' for col in aligned_columns if col not in unique_fields_per_table(table_name)])}
+                    RETURNING *;  -- Returns rows that were inserted or updated
+                ''')
+
+                # Log the number of rows affected
+                affected_rows = cursor.rowcount
+                logger.info(f"{affected_rows} rows were inserted or updated in '{table_name}'.")
+
+                conn.commit()
+                logger.info(f"Batch from file '{batch_csv_file_path}' committed successfully.")
+
+                # Clear the temp table for the next batch
+                cursor.execute(f"TRUNCATE TABLE {temp_table_name}")
+                logger.info(f"Temporary table '{temp_table_name}' cleared.")
+
+        finally:
+            # Cleanup all batch files
+            for batch_csv_file_path in batch_files:
+                if os.path.exists(batch_csv_file_path):
+                    os.remove(batch_csv_file_path)
+                    logger.info(f"Batch file '{batch_csv_file_path}' removed.")
 
         cursor.close()
         logger.info(f"Data insertion into '{table_name}' completed successfully.")
+
     except Exception as e:
         if conn:
             conn.rollback()
@@ -218,6 +261,8 @@ def insert_dataframe_to_db(df: pl.DataFrame, table_name: str, geometry_column: s
         if csv_file_path and os.path.exists(csv_file_path):
             os.remove(csv_file_path)
             logger.info(f"Temporary CSV file '{csv_file_path}' removed.")
+
+
 
 def create_projecttable(columns: list[str], tablename: str):
     conn = psycopg2.connect(**DATABASE_CONFIG)

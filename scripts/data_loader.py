@@ -20,7 +20,7 @@ def process_csv(file_name: str, project_key: str = None):
     try:
         # Validate with schemaplan
         logger.info(f"Loading CSV from data/{table_name}.csv")
-        csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=100000)
+        csv_df = pl.read_csv(f"data/{table_name}.csv", null_values=["NA", "N/A", "null"], infer_schema_length=10000000)
         csv_df = dataframe_validator(csv_df, table_name)
         logger.info(f"DataFrame validated for table: {table_name}")
 

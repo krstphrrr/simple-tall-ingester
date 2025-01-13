@@ -5,12 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Current File",
+            "name": "Debug insert_dataframe_to_db",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "./test_insert_dataframe_to_db.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true,
         }
     ]
 }
