@@ -300,14 +300,18 @@ def insert_project(values: list[str], columns: list[str], tablename: str):
     conn = psycopg2.connect(**DATABASE_CONFIG)
     # Insert data into the table
     insert_query = sql.SQL("""
-            INSERT INTO {db_schema}.{table} ({columns})
-            VALUES ({placeholders})
-        """).format(
-            db_schema = sql.Identifier(DBSCHEMA),
-            table=sql.Identifier(tablename),
-            columns=sql.SQL(', ').join(map(sql.Identifier, columns)),
-            placeholders=sql.SQL(', ').join(sql.Placeholder() * len(values))
+    INSERT INTO {db_schema}.{table} ({columns})
+    VALUES ({placeholders})
+    """).format(
+        db_schema=sql.Identifier(DBSCHEMA),
+        table=sql.Identifier(tablename),
+        columns=sql.SQL(', ').join(map(sql.Identifier, columns)),
+        placeholders=sql.SQL(', ').join(
+            sql.SQL("CAST({} AS public_test.delay_range_enum)".format(sql.Placeholder()))
+            if col == "delay_range" else sql.Placeholder()
+            for col in columns
         )
+    )
 
     try:
         cursor = conn.cursor()
